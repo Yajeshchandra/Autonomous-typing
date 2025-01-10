@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_install_python(PROGRAMS
-  scripts/keyboard_typer.py
+  scripts/keyboard_typing.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

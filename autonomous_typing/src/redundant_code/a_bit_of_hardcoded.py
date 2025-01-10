@@ -121,6 +121,42 @@ class KeyboardPositionCalculator:
             raise KeyError(f"Key '{key}' not found")
         return self.key_positions_3d[key]
     
+
+def main():
+    # Example usage
+    calculator = KeyboardPositionCalculator()
+    
+    # Load camera calibration (example values)
+    camera_matrix = np.array([
+        [1000, 0, 320],
+        [0, 1000, 240],
+        [0, 0, 1]
+    ])
+    calculator.load_camera_calibration(camera_matrix)
+    
+    # Load key positions from NPY file
+    calculator.load_key_positions('keyboard_layout.npy')
+    
+    # Example corner points in image (would come from camera)
+    corner_points = [
+        [32, 21],   # Top-left
+        [326, 21],   # Top-right
+        [320, 83],   # Bottom-right
+        [39, 83]    # Bottom-left
+    ]
+    
+    # Calculate transformation and 3D positions
+    calculator.calculate_transformation_matrix(corner_points)
+    calculator.calculate_all_key_positions()
+    
+    # Save positions
+    calculator.save_positions('keyboard_3d_positions.npy')
+    
+    # Get position of a specific key
+    print("Position of 'A' key:", calculator.get_key_position('A'))
+
+if __name__ == "__main__":
+    main()
     
     
 from ultralytics import YOLO
@@ -250,40 +286,3 @@ class KeyboardDetector:
 #     cap.release()
 #     cv2.destroyAllWindows()
 
-
-
-def main():
-    # Example usage
-    calculator = KeyboardPositionCalculator()
-    
-    # Load camera calibration (example values)
-    camera_matrix = np.array([
-        [1000, 0, 320],
-        [0, 1000, 240],
-        [0, 0, 1]
-    ])
-    calculator.load_camera_calibration(camera_matrix)
-    
-    # Load key positions from NPY file
-    calculator.load_key_positions('keyboard_layout.npy')
-    
-    # Example corner points in image (would come from camera)
-    corner_points = [
-        [32, 21],   # Top-left
-        [326, 21],   # Top-right
-        [320, 83],   # Bottom-right
-        [39, 83]    # Bottom-left
-    ]
-    
-    # Calculate transformation and 3D positions
-    calculator.calculate_transformation_matrix(corner_points)
-    calculator.calculate_all_key_positions()
-    
-    # Save positions
-    calculator.save_positions('keyboard_3d_positions.npy')
-    
-    # Get position of a specific key
-    print("Position of 'A' key:", calculator.get_key_position('A'))
-
-if __name__ == "__main__":
-    main()
