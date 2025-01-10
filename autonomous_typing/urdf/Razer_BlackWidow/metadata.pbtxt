@@ -1,0 +1,39 @@
+model {
+  file: "model.sdf"
+}
+name: "Razer_BlackWidow_Stealth_2014_Keyboard_07VFzIVabgh"
+description: "Razer BlackWidow Stealth 2014 - Keyboard\nThe Razer BlackWidow features the all-new Razer\357\277\275 Mechanical Switches that have been designed from the ground up with the aim of elevating the speed and responsiveness of the Razer BlackWidow gaming keyboard beyond the capabilities of current-gen mechanical switches. Tested and validated by the world\357\277\275s top eSports athletes, we have identified the optimal actuation distance and reduced the tolerance for faster commands and greater precision when compared to standard mechanical switches."
+version: 1
+authors {
+  name: "Google"
+  email: "scanned-objects@google.com"
+}
+legal {
+  copyright: "Copyright 2020 Google LLC."
+  license: "Creative Commons Attribution 4.0 International"
+}
+annotations {
+  key: "brand"
+  value: "Razer"
+}
+annotations {
+  key: "gtin"
+  value: "811254021358"
+}
+annotations {
+  key: "mpn"
+  value: "rz03-00393700-r3u1"
+}
+annotations {
+  key: "sku"
+  value: "811254021358"
+}
+compatibilities {
+  name: "Gazebo"
+  version {
+    major: 11
+  }
+}
+categories {
+  first: "Keyboard"
+}
