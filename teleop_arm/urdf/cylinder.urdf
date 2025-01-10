@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<robot name="small_cylinder">
+  <link name="cylinder_link">
+    <visual>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="1"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.00025" ixy="0.0" ixz="0.0" iyy="0.00025" iyz="0.0" izz="0.0005"/>
+    </inertial>
+  </link>
+
+  <gazebo>
+    <static>false</static>
+  </gazebo>
+
+  <gazebo reference="cylinder_link">
+    <material>Gazebo/Red</material>
+  </gazebo>
+</robot>

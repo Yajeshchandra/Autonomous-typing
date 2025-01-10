@@ -1,0 +1,27 @@
+<launch>
+	<arg name="arg_x" default="0.00" />
+	<arg name="arg_y" default="0.00" />
+	<arg name="arg_z" default="0.1" />
+	<arg name="arg_R" default="0.00" />
+	<arg name="arg_P" default="0.00" />
+	<arg name="arg_Y" default="0.00" />
+
+	<!--Urdf file path-->
+	<param name="robot_description" command="$(find xacro)/xacro --inorder $(find iiwa_description)/urdf/iiwa7.urdf"/>
+
+	<!--spawn a empty gazebo world-->
+	<include file="$(find gazebo_ros)/launch/empty_world.launch" />
+	<node name="tf_footprint_base" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 base_link base_footprint 40" />
+
+	<!--spawn model-->
+	<node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model iiwa" />
+
+	<!--Load and launch the joint trajectory controller-->
+	<rosparam file ="$(find Arm_Urdf)/config/joint_trajectory_control_iiwa.yaml" command="load"/>
+	<node name= "controller_spawner" pkg= "controller_manager" type="spawner" respawn="false" output="screen" args="end_effector_controller body_controller joint_state_controller"/>
+	<!-- Robot State Publisher for TF of each joint: publishes all the current states of the joint, then RViz can visualize -->
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen"/>
+
+    <node name="controller_manager" pkg="controller_manager" type="controller_manager" respawn="false" output="screen" />
+
+</launch>

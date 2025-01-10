@@ -1,0 +1,66 @@
+<launch>
+
+  <!-- <include file="$(find gazebo_ros)/launch/empty_world.launch"/> -->
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find aws_robomaker_bookstore_world)/worlds/bookstore.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+
+
+
+  <!-- Spawn URDF model -->
+
+  <!-- <arg name="urdf_file" default="$(find yolo_camera_pkg)/urdf/box.urdf"/> -->
+  <!-- <arg name="urdf_file" default="$(find yolo_camera_pkg)/urdf/camera.urdf"/> -->
+  <arg name="urdf_file" default="$(find yolo_camera_pkg)/urdf/box_with_camera_main_working.urdf"/>
+  <!-- <arg name="urdf_file" default="$(find yolo_camera_pkg)/urdf/box_with_camera2.urdf"/> -->
+
+
+
+
+  <param name="robot_description" command="cat $(arg urdf_file)"/>
+
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model square_box -x 1.0 "/>
+
+  <!-- <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model square_box"/> -->
+
+
+
+
+  <!-- Spawn red sphere -->
+
+  <node name="spawn_red_sphere" pkg="gazebo_ros" type="spawn_model" args="
+    -urdf
+    -model red_sphere
+    -param /red_sphere_description
+    -x 1.0
+    -y 0
+    -z 1.35
+
+
+  "/>
+
+
+  <param name="red_sphere_description" command="cat $(find yolo_camera_pkg)/urdf/red_sphere.urdf"/>
+
+
+
+  <!-- Launch robot_state_publisher to broadcast TFs -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher">
+    <param name="robot_description" command="cat $(arg urdf_file)"/>
+  </node>
+
+
+
+  <!-- Static transform from 'map' frame to 'base_link' frame -->
+  <node name="static_transform_publisher" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 map base_link 100" />
+
+  <!-- Launch RViz -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find yolo_camera_pkg)/rviz/box.rviz" required="true"/>
+</launch>

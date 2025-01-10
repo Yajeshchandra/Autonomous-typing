@@ -1,0 +1,19 @@
+controller_list:
+  - name: body_controller
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: True
+    joints:
+      - Joint_1
+      - Joint_2
+      - Joint_3
+      - Joint_4
+      - Joint_5
+      - Joint_6
+  - name: end_effector_controller
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: True
+    joints:
+      - Finger_1
+      - Finger_2

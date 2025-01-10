@@ -1,0 +1,36 @@
+<launch>
+
+<include file = "$(find Arm_Urdf)/launch/new.launch" />  
+
+  <!-- Launch Moveit Move Group Node -->
+
+<include file = "$(find arm_moveit_config)/launch/move_group.launch" />  
+  
+ 
+  <!-- Run Rviz and load the default configuration to see the state of the move_group node -->  
+  <arg name="use_rviz" default="true" /> 
+ 
+  <include file="$(find arm_moveit_config)/launch/moveit_rviz.launch" if="$(arg 
+use_rviz)"> 
+    <arg name="rviz_config" value="$(find arm_moveit_config)/launch/moveit_updated.rviz"/> 
+  </include> 
+
+
+
+    <node name="spawn_cylinder" pkg="gazebo_ros" type="spawn_model" args="
+    -urdf
+    -model cylinder
+    -param /cylinder_description
+    -x 0
+    -y -0.7
+    -z 0.1
+
+
+  "/>
+
+
+  <param name="cylinder_description" command="cat $(find teleop_arm)/urdf/cylinder.urdf"/>
+
+
+
+</launch>

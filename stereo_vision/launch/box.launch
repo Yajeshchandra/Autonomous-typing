@@ -1,0 +1,25 @@
+<launch>
+  <!-- Launch empty Gazebo world -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+
+  <!-- Spawn URDF model -->
+  <!-- <arg name="urdf_file" default="$(find yolo_camera_pkg)/urdf/box.urdf"/> -->
+  <arg name="urdf_file" default="$(find yolo_camera_pkg)/urdf/camera.urdf"/>
+
+  <param name="robot_description" command="cat $(arg urdf_file)"/>
+
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model square_box"/>
+
+  <!-- Launch robot_state_publisher to broadcast TFs -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher">
+    <param name="robot_description" command="cat $(arg urdf_file)"/>
+  </node> 
+  <!-- This  -->
+
+  <!-- Static transform from 'map' frame to 'base_link' frame -->
+  <node name="static_transform_publisher" pkg="tf" type="static_transform_publisher"
+        args="0 0 0 0 0 0 map box 100" />
+
+  <!-- Launch RViz -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find yolo_camera_pkg)/rviz/box.rviz" required="true"/>
+</launch>
