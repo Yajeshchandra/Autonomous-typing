@@ -15,6 +15,7 @@ from typing import Dict, List, Tuple
 # from pynput.keyboard import Key, KeyCode, Listener
 from ultralytics import YOLO
 import cv2
+from scipy.linalg import solve
 
 TOTAL_LENGTH_MM = 354.076  # Length in mm
 TOTAL_WIDTH_MM = 123.444   # Width in mm
@@ -32,6 +33,7 @@ class KeyboardTyperWithIK(QWidget):
         self.setup_control()
         
         # Keyboard typer specific attributes
+        self.keboard_dimensions = (TOTAL_LENGTH_MM, TOTAL_WIDTH_MM)
         self.key_positions: Dict[str, np.ndarray] = {}
         self.home_position: np.ndarray = None
         self.hover_distance = 0.01  # 1cm hover distance
@@ -187,8 +189,7 @@ class KeyboardTyperWithIK(QWidget):
                 max(0, x1-padding):min(img.shape[1], x2+padding)]
         
         # Preprocess for line detection
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+        edges = self.image_preprocess(crop)
         
         # Detect lines using Hough Transform
         lines = cv2.HoughLines(edges, 1, np.pi/180, threshold=100)
@@ -250,7 +251,6 @@ class KeyboardTyperWithIK(QWidget):
         
         return original_corners, corners, dominant_angle
     
-    # TODO : This is not integrated in self.detection() function
     def image_preprocess(self, image_path):
         # Load the image
         image = cv2.imread(image_path)
@@ -286,85 +286,127 @@ class KeyboardTyperWithIK(QWidget):
         # Binarize the image
         _, binarized = cv2.threshold(normalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        return {
-            "resized": resized,
-            "gray": gray,
-            "background_subtracted": background_subtracted,
-            "normalized": normalized,
-            "clahe_result": clahe_result,
-            "illumination_corrected": illumination_corrected,
-            "binarized": binarized
-        }
-    
-    # TODO : Logic error in the function
-    def estimate(self, corner_points, keyboard_dimensions, depth_image):
+        return binarized
+
+    def estimate(self, corner_points):
         """
-        Estimates the keyboard's depth, overlays points, and calculates transformations.
+        Estimate the depth and transformed positions of points on a rectangle using class camera parameters.
         
-        :param corner_points: (4x2 array) The detected corner points of the keyboard in the image.
-        :param keyboard_dimensions: (width, height) Dimensions of the keyboard in real-world units (e.g., cm).
-        :param depth_image: The depth image captured from the depth camera.
+        Args:
+            corner_points: List of 4 points [(x1,y1), (x2,y2), (x3,y3), (x4,y4)] representing rectangle corners
+            keyboard_dimensions: Tuple of (width, height) representing true rectangle dimensions
         
-        :return: A dictionary containing:
-                 - 2D points in the image.
-                 - 3D world positions of the keyboard corners.
-                 - Transformation matrix (camera to world frame).
+        Returns:
+            dict: Contains depth values for corners and transformed positions of points
         """
-        # Ensure the corner points are a NumPy array
+        
+        keyboard_dimensions = self.keyboard_dimensions
+        
+        # Convert corner points to numpy array
         corner_points = np.array(corner_points, dtype=np.float32)
-
-        # Get depth values at the corner points
-        depths = [depth_image[int(pt[1]), int(pt[0])] for pt in corner_points]
-
-        # Calculate the average depth of the keyboard
-        avg_depth = np.mean(depths)
-
-        # Define the real-world coordinates of the keyboard's corners (relative to top-left)
-        width, height = keyboard_dimensions
-        object_points = np.array([
-            [0, 0, 0],  # Top-left
-            [width, 0, 0],  # Top-right
-            [width, height, 0],  # Bottom-right
-            [0, height, 0]  # Bottom-left
-        ], dtype=np.float32)
-
-        # Solve for the pose (camera-to-world transformation)
-        success, rvec, tvec = cv2.solvePnP(object_points, corner_points, self.camera_matrix, self.dist_coeffs)
-        if not success:
-            raise ValueError("Unable to solve for pose. Check inputs or calibration data.")
-
-        # Convert rotation vector to matrix
-        rotation_matrix, _ = cv2.Rodrigues(rvec)
-
-        # Construct the transformation matrix
-        transformation_matrix = np.eye(4)
-        transformation_matrix[:3, :3] = rotation_matrix
-        transformation_matrix[:3, 3] = tvec.ravel()
-
-        # Overlay pre-stored points (relative to top-left corner)
-        overlay_points = np.array([
-            [10, 10, 0],  # Example point (10 cm right, 10 cm down)
-            [20, 10, 0],  # Another example
-        ], dtype=np.float32)
-        overlay_image_points, _ = cv2.projectPoints(overlay_points, rvec, tvec, self.camera_matrix, self.dist_coeffs)
-
-        # Convert projected points to 2D
-        overlay_image_points = overlay_image_points.squeeze(axis=1)
         
-        #TODO : Returning bullshit
+        # Undistort the corner points using class camera parameters
+        undistorted_corners = cv2.undistortPoints(
+            corner_points.reshape(-1, 1, 2), 
+            self.camera_matrix, 
+            self.dist_coeffs, 
+            P=self.camera_matrix
+        ).reshape(-1, 2)
+        
+        # Create 3D model points of the rectangle in its canonical position
+        true_width, true_height = keyboard_dimensions
+        object_points = np.array([
+            [0, 0, 0],
+            [true_width, 0, 0],
+            [true_width, true_height, 0],
+            [0, true_height, 0]
+        ], dtype=np.float32)
+        
+        # Find the pose of the rectangle
+        success, rotation_vector, translation_vector = cv2.solvePnP(
+            object_points,
+            undistorted_corners,
+            self.camera_matrix,
+            self.dist_coeffs,
+            flags=cv2.SOLVEPNP_ITERATIVE
+        )
+        
+        if not success:
+            raise ValueError("Failed to estimate pose from corner points")
+        
+        # Convert rotation vector to matrix
+        rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
+        
+        # Create transformation matrix
+        transformation_matrix = np.hstack((rotation_matrix, translation_vector))
+        transformation_matrix = np.vstack((transformation_matrix, [0, 0, 0, 1]))
+        
+        # Calculate depths for corner points
+        corner_depths = []
+        for point in corner_points:
+            # Undistort the point
+            undistorted_point = cv2.undistortPoints(
+                point.reshape(-1, 1, 2),
+                self.camera_matrix,
+                self.dist_coeffs,
+                P=self.camera_matrix
+            ).reshape(2)
+            
+            # Convert to normalized coordinates
+            normalized_point = np.linalg.inv(self.camera_matrix) @ np.array([undistorted_point[0], undistorted_point[1], 1])
+            
+            # Calculate ray direction
+            ray_direction = normalized_point / np.linalg.norm(normalized_point)
+            
+            # Calculate intersection with the plane of the rectangle
+            plane_normal = rotation_matrix @ np.array([0, 0, 1])
+            plane_point = translation_vector.reshape(3)
+            
+            # Calculate depth using ray-plane intersection
+            d = np.dot(plane_normal.flatten(), plane_point.flatten())
+            depth = d / np.dot(plane_normal.flatten(), ray_direction)
+            corner_depths.append(depth)
+        
+        # Transform additional points if they exist
+        transformed_positions = None
+        if hasattr(self, 'key_positions') and self.key_positions is not None:
+            transformed_positions = []
+            for point in self.key_positions:
+                # Create homogeneous point
+                homogeneous_point = np.append(point, [0, 1])  # Z=0 since points lie on rectangle
+                
+                # Transform point using estimated pose
+                transformed = transformation_matrix @ homogeneous_point
+                
+                # Project point to image plane
+                projected_point = self.camera_matrix @ transformed[:3]
+                projected_point = projected_point / projected_point[2]
+                
+                # Add distortion
+                distorted_point = cv2.projectPoints(
+                    transformed[:3].reshape(1, 1, 3),
+                    rotation_vector,
+                    translation_vector,
+                    self.camera_matrix,
+                    self.dist_coeffs
+                )[0].reshape(2)
+                
+                transformed_positions.append(distorted_point)
+        
         return {
-            "2D_points": corner_points,  # Original 2D points in the image
-            "3D_positions": object_points + np.array([0, 0, avg_depth]),  # Adjusted for average depth
-            "camera_to_world_transform": transformation_matrix,
-            "overlay_2D": overlay_image_points
-        }
-    
+            'corner_depths': np.array(corner_depths),
+            'transformed_positions': np.array(transformed_positions) if transformed_positions else None,
+            'rotation_matrix': rotation_matrix,
+            'translation_vector': translation_vector,
+            'transformation_matrix': transformation_matrix
+        } 
+        
     # TODO : This function is also bullshit
     def scanning(self, image_path):
         
         corners, _, _ = self.detection(image_path, keyboard_dims=(30, 10), padding=50)
         
-        pos2d,pos3d,tf_cw = self.estimate(corners, (30, 10), image_path)
+        pos2d,pos3d,tf_cw = self.estimate(corners)
         
         self.key_positions = {str(i): pos3d[i] for i in range(4)}
         self.tranfromation_matrix_cam_to_world_wrt_cam = tf_cw
