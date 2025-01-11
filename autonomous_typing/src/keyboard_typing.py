@@ -151,7 +151,7 @@ class KeyboardTyperWithIK(QWidget):
         self.pub.publish(trajectory_msg)
             
 
-    def detection(self,image_path, keyboard_dims=(30, 10),padding=50):  # dimensions in cm
+    def detection(self,image_path,padding=50):  # dimensions in cm
         """
         Detect and correct keyboard orientation in an image
         Args:
@@ -163,6 +163,8 @@ class KeyboardTyperWithIK(QWidget):
             rotated_bbox: Rotated bounding box coordinates
             angle: Detected rotation angle
         """
+        keyboard_dims = self.keyboard_dimensions
+        
         # Read image
         img = cv2.imread(image_path)
         # original = img.copy()
@@ -404,7 +406,7 @@ class KeyboardTyperWithIK(QWidget):
     # TODO : This function is also bullshit
     def scanning(self, image_path):
         
-        corners, _, _ = self.detection(image_path, keyboard_dims=(30, 10), padding=50)
+        corners, _, _ = self.detection(image_path, padding=50)
         
         pos2d,pos3d,tf_cw = self.estimate(corners)
         
