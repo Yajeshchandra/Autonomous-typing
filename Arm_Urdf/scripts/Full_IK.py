@@ -9,7 +9,12 @@ import os
 from pinocchio.visualize import MeshcatVisualizer
 
 # Load the robot model
-urdf_path = os.path.join("Arm_Urdf", "urdf", "Arm_Urdf.urdf")  # Replace with the path to your URDF file
+# urdf_path = os.path.join("Arm_Urdf", "urdf", "Arm_Urdf.urdf")  # Replace with the path to your URDF file
+# Get the absolute path to the directory containing this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Build the full path to the URDF file relative to the script's location
+urdf_path = os.path.join(script_dir, "../urdf/Arm_Urdf.urdf")
 model = pin.buildModelFromUrdf(urdf_path)
 data = model.createData()
 

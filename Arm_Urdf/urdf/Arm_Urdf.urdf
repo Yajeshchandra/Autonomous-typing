@@ -68,7 +68,7 @@
     <!-- camera base left -->
 
 
-    <joint name="camera_joint_base_left" type="fixed">
+    <!-- <joint name="camera_joint_base_left" type="fixed">
         <axis xyz="0 1 0"/>
         <origin rpy="0 0 -1.57" xyz="0.12 -0.15 0.02"/>
         <parent link="Link_1"/>
@@ -105,13 +105,13 @@
         <origin xyz="0 0 0" rpy="-1.5707963 0 -1.5707963"/>
     </joint>
 
-    <link name="camera_link_optical_base_left"></link>
+    <link name="camera_link_optical_base_left"></link> -->
 
 
     <!-- camera base right -->
 
 
-    <joint name="camera_base_joint_right" type="fixed">
+    <!-- <joint name="camera_base_joint_right" type="fixed">
         <axis xyz="0 1 0"/>
         <origin rpy="0 0 -1.57" xyz="-0.12 -0.15 0.1"/>
         <parent link="Link_1"/>
@@ -139,15 +139,15 @@
                 <color rgba="1 1 1 1"/>
             </material>
         </visual>
-    </link>
+    </link> -->
 
-    <joint name="camera_optical_joint_base_right" type="fixed">
+    <!-- <joint name="camera_optical_joint_base_right" type="fixed">
         <parent link="camera_link_base_right"/>
         <child link="camera_link_optical_base_right"/>
         <origin xyz="0 0 0" rpy="-1.5707963 0 -1.5707963"/>
     </joint>
 
-    <link name="camera_link_optical_base_right"></link>
+    <link name="camera_link_optical_base_right"></link> -->
 
 
     <!-- Add camera optical frame with standard computer vision orientation -->

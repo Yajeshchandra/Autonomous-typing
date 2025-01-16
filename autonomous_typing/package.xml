@@ -52,27 +52,36 @@
   <build_depend>numpy-quaternion</build_depend>
   <build_depend>pinocchio</build_depend>
   <build_depend>python-quadprog</build_depend>
-  <build_depend>python3-pynput</build_depend>
-  <build_depend>python3-pyqt5</build_depend>
-  <build_depend>python3-sklearn</build_depend>
+  <build_depend>pynput</build_depend>
+  <build_depend>pyqt5</build_depend>
+  <!-- <build_depend>sklearn</build_depend> -->
   <build_depend>rospy</build_depend>
   <build_depend>trajectory_msgs</build_depend>
+  <!-- <build_depend>sensor_msgs</build_depend> -->
   <build_export_depend>numpy-quaternion</build_export_depend>
   <build_export_depend>pinocchio</build_export_depend>
   <build_export_depend>python-quadprog</build_export_depend>
-  <build_export_depend>python3-pynput</build_export_depend>
-  <build_export_depend>python3-pyqt5</build_export_depend>
-  <build_export_depend>python3-sklearn</build_export_depend>
+  <build_export_depend>pynput</build_export_depend>
+  <build_export_depend>pyqt5</build_export_depend>
+  <!-- <build_export_depend>sklearn</build_export_depend> -->
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>trajectory_msgs</build_export_depend>
   <exec_depend>numpy-quaternion</exec_depend>
   <exec_depend>pinocchio</exec_depend>
   <exec_depend>python-quadprog</exec_depend>
-  <exec_depend>python3-pynput</exec_depend>
-  <exec_depend>python3-pyqt5</exec_depend>
-  <exec_depend>python3-sklearn</exec_depend>
+  <exec_depend>pynput</exec_depend>
+  <exec_depend>pyqt5</exec_depend>
+  <!-- <exec_depend>sklearn</exec_depend> -->
   <exec_depend>rospy</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
+  <!-- <exec_depend>sensor_msgs</exec_depend> -->
+  <exec_depend>opencv-python-headless</exec_depend>
+  <exec_depend>ultralytics</exec_depend>
+
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>std_msgs</depend>
+
 
 
   <!-- The export tag contains other, unspecified, tags -->

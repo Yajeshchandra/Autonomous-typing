@@ -22,7 +22,15 @@ This repository provides simulation and teleoperation tools for controlling a ro
   ```
   sudo apt-get install ros-noetic-moveit
   ```
-  
+
+  ```
+  pip3 install pinocchio quadprog pynput pyqt5 scikit-learn
+  ```
+  ```
+  rosdep update
+  rosdep install --from-paths src --ignore-src -r -y
+  ```
+
 > [!NOTE]
 > All the installation commands are for rosdep noetic change noetic with <your_distro_name>
 
