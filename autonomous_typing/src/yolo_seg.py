@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -10,132 +10,190 @@ import json
 
 class YoloPixelSegmentationNode:
     def __init__(self):
-        # Initialize the ROS node
         rospy.init_node('yolo_pixel_segmentation_node', anonymous=True)
-
+        
         # Parameters
         self.input_topic = rospy.get_param('~input_topic', '/camera_gripper/image_raw')
-        self.output_topic = rospy.get_param('~output_topic', '/camera_gripper/segmented_image')
-        self.output_topic_bin = rospy.get_param('~output_topic_bin', '/camera_gripper/bin_segmented_image')
+        self.camera_info_topic = rospy.get_param('~camera_info_topic', '/camera_gripper/camera_info')
+        self.output_topic = rospy.get_param('~output_topic', '/camera_gripper/processed_image')
         self.class_to_detect = rospy.get_param('~class_to_detect', 66)
-
-        # YOLO model
-        self.model = YOLO('yolov8n-seg.pt')  # Replace with the appropriate YOLOv8 segmentation model
-
-        # ROS Topics
+        
+        # Real-world keyboard dimensions (mm)
+        self.KEYBOARD_LENGTH = 354.076
+        self.KEYBOARD_WIDTH = 123.444
+        
+        # Initialize YOLO model
+        self.model = YOLO('yolov8n-seg.pt')
+        
+        # Camera parameters (will be updated from camera_info)
+        self.camera_matrix = None
+        self.dist_coeffs = None
+        
+        # Setup ROS communication
         self.bridge = CvBridge()
         self.subscriber = rospy.Subscriber(self.input_topic, Image, self.image_callback)
+        self.camera_info_sub = rospy.Subscriber(self.camera_info_topic, CameraInfo, self.camera_info_callback)
         self.publisher = rospy.Publisher(self.output_topic, Image, queue_size=10)
-        self.publisher_bin = rospy.Publisher(self.output_topic_bin, Image, queue_size=10)
-
-        rospy.loginfo("YoloPixelSegmentationNode initialized.")
-    def image_preprocessing(self,image):
-            
-        resized = cv2.resize(image, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-
-        # Apply a large Gaussian blur to estimate the background
-        blur = cv2.GaussianBlur(gray, (51, 51), 0)
-        # Subtract the background
-        background_subtracted = cv2.subtract(gray, blur)
         
-        normalized = cv2.normalize(background_subtracted, None, 0, 255, cv2.NORM_MINMAX)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        clahe_result = clahe.apply(normalized)
+        # Load keyboard layout
+        with open('/home/ub20/rsws/src/autonomous_typing/src/keyboard_layout.json', 'r') as f:
+            self.keyboard_points_dict = json.load(f)
+        
+        rospy.loginfo("YoloPixelSegmentationNode initialized.")
 
-        # Estimate the illumination
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (51, 51))
-        illumination = cv2.morphologyEx(clahe_result, cv2.MORPH_CLOSE, kernel)
-        # Correct the image by dividing by the illumination
-        illumination_corrected = cv2.divide(clahe_result, illumination, scale=255)
+    def camera_info_callback(self, msg):
+        self.camera_matrix = np.array(msg.K).reshape(3, 3)
+        self.dist_coeffs = np.array(msg.D)
 
-        _, binarized = cv2.threshold(normalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return binarized
+    def draw_axes(self, img, rvec, tvec, camera_matrix, dist_coeffs, length=50):
+        """Draw 3D coordinate axes on the image."""
+        # Define the 3D points for coordinate axes
+        origin = np.float32([[0, 0, 0]])
+        x_axis = np.float32([[length, 0, 0]])
+        y_axis = np.float32([[0, length, 0]])
+        z_axis = np.float32([[0, 0, length]])
+        
+        # Project 3D points to image plane
+        origin_2d, _ = cv2.projectPoints(origin, rvec, tvec, camera_matrix, dist_coeffs)
+        x_2d, _ = cv2.projectPoints(x_axis, rvec, tvec, camera_matrix, dist_coeffs)
+        y_2d, _ = cv2.projectPoints(y_axis, rvec, tvec, camera_matrix, dist_coeffs)
+        z_2d, _ = cv2.projectPoints(z_axis, rvec, tvec, camera_matrix, dist_coeffs)
+        
+        # Convert to integer coordinates
+        origin_pt = tuple(map(int, origin_2d[0].ravel()))
+        x_pt = tuple(map(int, x_2d[0].ravel()))
+        y_pt = tuple(map(int, y_2d[0].ravel()))
+        z_pt = tuple(map(int, z_2d[0].ravel()))
+        
+        # Draw the axes
+        cv2.line(img, origin_pt, x_pt, (255, 0, 255), 2)  # X-axis in Red
+        cv2.line(img, origin_pt, y_pt, (0, 0, 255), 2)  # Y-axis in Green
+        cv2.line(img, origin_pt, z_pt, (255, 100, 0), 2)  # Z-axis in Blue
+        
+        # Add axis labels
+        cv2.putText(img, 'X', x_pt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        cv2.putText(img, 'Y', y_pt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(img, 'Z', z_pt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        
+        # Draw origin point
+        cv2.circle(img, origin_pt, 3, (255, 255, 255), -1)
+        cv2.putText(img, 'O', (origin_pt[0]-10, origin_pt[1]-10), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-        binarized = cv2.GaussianBlur(binarized, (5, 5), 0)
-        kernel = np.ones((5,5), np.uint8)   # 5x5 kernel
-        opening = cv2.morphologyEx(binarized, cv2.MORPH_OPEN, kernel)
-        binarized = cv2.dilate(binarized, kernel, iterations=3)
-        return binarized
-    
+    def process_image(self, cv_image, results):
+        # Create visualization image
+        vis_image = cv_image.copy()
+        
+        if len(results) == 0:
+            return vis_image
+
+        # Get predictions from the first result
+        result = results[0]
+        
+        if len(result.boxes) == 0:
+            return vis_image
+
+        # Process each detection
+        for idx in range(len(result.boxes)):
+            # Get class id
+            class_id = int(result.boxes.cls[idx].item())
+            
+            if class_id == self.class_to_detect:
+                # Get bounding box
+                box = result.boxes.xyxy[idx].cpu().numpy()
+                x1, y1, x2, y2 = map(int, box)
+                
+                # Get segmentation mask
+                if result.masks is not None and idx < len(result.masks):
+                    mask = result.masks[idx].data[0].cpu().numpy()
+                    mask = (mask > 0.5).astype(np.uint8) * 255
+                    mask = cv2.resize(mask, (cv_image.shape[1], cv_image.shape[0]))
+                    
+                    # Get mask contours
+                    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    
+                    # Draw mask outline
+                    cv2.drawContours(vis_image, contours, -1, (0, 255, 255), 2)
+                
+                # Draw bounding box
+                cv2.rectangle(vis_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Scale and position keyboard points
+                keyboard_points = np.array(list(self.keyboard_points_dict.values()))
+                box_length = x2 - x1
+                box_width = y2 - y1
+                scaled_points = (keyboard_points / np.array([self.KEYBOARD_LENGTH, self.KEYBOARD_WIDTH])) * \
+                              np.array([box_length, box_width]) + np.array([x1, y1])
+                
+                if self.camera_matrix is not None:
+                    try:
+                        # Create 3D model points (assuming keyboard is flat)
+                        model_points = np.zeros((len(keyboard_points), 3))
+                        model_points[:, 0] = keyboard_points[:, 0]
+                        model_points[:, 1] = keyboard_points[:, 1]
+                        
+                        # Convert points to appropriate format
+                        model_points = model_points.astype(np.float32)
+                        scaled_points = scaled_points.astype(np.float32)
+                        
+                        # Solve PnP
+                        success, rvec, tvec = cv2.solvePnP(model_points, 
+                                                         scaled_points, 
+                                                         self.camera_matrix, 
+                                                         self.dist_coeffs,
+                                                         flags=cv2.SOLVEPNP_ITERATIVE)
+                        
+                        if success:
+                            # Draw coordinate axes
+                            self.draw_axes(vis_image, rvec, tvec, self.camera_matrix, self.dist_coeffs)
+                            
+                            # Project points to get depth
+                            projected_points, _ = cv2.projectPoints(model_points, 
+                                                                  rvec, 
+                                                                  tvec, 
+                                                                  self.camera_matrix, 
+                                                                  self.dist_coeffs)
+                            
+                            # Draw points with depth information
+                            for i, (point, proj_point) in enumerate(zip(scaled_points, projected_points)):
+                                point = point.astype(int)
+                                depth = float(tvec[2] + model_points[i, 2])  # Z component
+                                
+                                # Color gradient based on depth (red=closer, blue=farther)
+                                color = (int(255 * (1 - depth/1000)), 0, int(255 * depth/1000))
+                                cv2.circle(vis_image, tuple(point), 5, color, -1)
+                                
+                                # Display depth value
+                                cv2.putText(vis_image, 
+                                          f'{depth:.1f}', 
+                                          (point[0] + 5, point[1] - 5),
+                                          cv2.FONT_HERSHEY_SIMPLEX, 
+                                          0.3, 
+                                          color, 
+                                          1)
+                    except Exception as e:
+                        rospy.logwarn(f"PnP estimation failed: {e}")
+                
+        return vis_image
+
     def image_callback(self, msg):
         try:
             # Convert ROS Image to OpenCV format
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             cv_image = cv2.resize(cv_image, (640, 640))
-
-            # YOLOv8 inference
-            results = self.model(cv_image)
-
-            # Process results to extract pixel-level segmentation
-            segmented_image = self.get_pixel_segmentation(results, cv_image)
             
-            # Binarize the segmented image
-            binarized_image = self.image_preprocessing(segmented_image)
-
-            # Convert OpenCV image back to ROS Image and publish
-            ros_image = self.bridge.cv2_to_imgmsg(segmented_image, encoding="bgr8")
+            # Run YOLO inference
+            results = self.model(cv_image)
+            
+            # Process image and add visualizations
+            processed_image = self.process_image(cv_image, results)
+            
+            # Publish processed image
+            ros_image = self.bridge.cv2_to_imgmsg(processed_image, encoding="bgr8")
             self.publisher.publish(ros_image)
-            ros_image_bin = self.bridge.cv2_to_imgmsg(binarized_image, encoding="mono8")
-            self.publisher_bin.publish(ros_image_bin)
+            
         except Exception as e:
             rospy.logerr(f"Error in image_callback: {e}")
-
-    def get_pixel_segmentation(self, results, original_image):
-        # Create a blank mask with the same dimensions as the original image
-        mask = np.zeros(original_image.shape[:2], dtype=np.uint8)
-        x1=0
-        y1=0
-        x2=0
-        y2=0
-        # Iterate through all detections in the results
-        for box, cls, seg_mask in zip(results[0].boxes.data, results[0].boxes.cls, results[0].masks.data):
-            # Extract bounding box coordinates and draw rectangle
-            class_id = int(cls.item())  # Class ID of the detection
-            if class_id == self.class_to_detect:
-                x1, y1, x2, y2 = box[:4].tolist()
-                # Extract the segmentation mask for the detected class
-                seg = (seg_mask.cpu().numpy() > 0.5).astype(np.uint8) * 255
-                mask = cv2.bitwise_or(mask, seg)
-
-        # Create an RGB image with the mask overlaid
-        segmented_image = cv2.bitwise_and(original_image, original_image, mask=mask)
-        cv2.rectangle(segmented_image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-        # Load the keyboard layout points from JSON
-        with open('/home/ub20/rsws/src/autonomous_typing/src/keyboard_layout.json', 'r') as f:
-            keyboard_points_dict = json.load(f)
-        keyboard_points = np.array(list(keyboard_points_dict.values()))
-        rospy.loginfo(keyboard_points)
-        TOTAL_LENGTH_MM = 354.076  # Length in mm
-        TOTAL_WIDTH_MM = 123.444   # Width in mm
-
-        box_length = int(x2) - int(x1)
-        box_width = int(y2) - int(y1)
-
-        scaled_keyboard_points = (keyboard_points / np.array([TOTAL_LENGTH_MM, TOTAL_WIDTH_MM])) * np.array([box_length, box_width])
-        # Add offset of top left corner to keyboard points
-        keyboard_points = scaled_keyboard_points + np.array([int(x1), int(y1)]) 
-        for point in keyboard_points:
-            cv2.circle(segmented_image, tuple(point.astype(int)), radius=5, color=(255, 0, 0), thickness=-1)
-        # keyboard_points_dict = np.load('/home/ub20/rsws/src/autonomous_typing/src/keyboard_layout.npy', allow_pickle=True)
-        # keyboard_points = keyboard_points_dict.values()
-        # keyboard_points = np.array(keyboard_points)
-        # rospy.INFO(keyboard_points)
-        # TOTAL_LENGTH_MM = 354.076  # Length in mm
-        # TOTAL_WIDTH_MM = 123.444   # Width in mm
-
-        # box_length = int(x2) - int(x1)
-        # box_width = int(y2) - int(y1)
-
-        # scaled_keyboard_points = (keyboard_points / np.array([TOTAL_LENGTH_MM, TOTAL_WIDTH_MM])) * np.array([box_length, box_width])
-        # # keyboard_points = scaled_keyboard_points.astype(int)
-        # # Add offset of top left corner to keyboard points
-        # keyboard_points = scaled_keyboard_points + np.array([int(x1), int(y1)]) 
-        # for point in keyboard_points:
-        #     cv2.circle(segmented_image, tuple(point), radius=5, color=(255, 0, 0), thickness=-1)
-
-        return segmented_image
-
 
 if __name__ == '__main__':
     try:
